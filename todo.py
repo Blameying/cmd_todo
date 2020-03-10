@@ -139,9 +139,6 @@ def text_align(text, size):
         count += 1
         text += ' '
 
-    if count > size:
-        return count[0:size]
-
     padSize = (size - count) // 2
     return (' ' * padSize) + text + (' ' * padSize)
 
