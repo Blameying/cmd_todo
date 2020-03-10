@@ -165,17 +165,17 @@ def wrong():
 def display(items):
     global LEVELS
 
-    redStart = '\033[0;31;43m'
-    blueStart = '\033[0;37;46m'
-    whiteStart = '\033[0;30;47m'
+    redStart = '\033[0;31m'
+    blueStart = '\033[0;32m'
+    whiteStart = '\033[0;34m'
     colorEnd = '\033[0m'
 
-    redContent = '\033[0;31;47m'
-    blueContent = '\033[0;36;47m'
-    whiteContent = '\033[0;37;40m'
+    redContent = '\033[0;36m'
+    blueContent = '\033[0;36m'
+    whiteContent = '\033[0;36m'
 
-    yellowStatus = '\033[0;33;42m'
-    whiteStatus = '\033[0;32;47m'
+    yellowStatus = '\033[0;33m'
+    whiteStatus = '\033[0;35m'
 
     unfinished = 'Unfinish'
     finished = 'Finish'
