@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import sqlalchemy
-from sqlalchemy import Column, Integer, Text, DateTime, Boolean
+from sqlalchemy import Column, Integer, Text, DateTime, Boolean, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.sql import and_, or_
 import os
 import sys
 import getopt
@@ -40,6 +42,18 @@ class TodoItem(Base):
         return {'id': self.id, 'level': self.level, 'content': self.content,
                 'created_at': str(self.created_at), 'is_finish': self.is_finish,
                 'finished_at': str(self.finished_at)}
+
+
+class TimeRecorder(Base):
+    'model to record todo task time'
+
+    __tablename__ = 'time_recoder'
+
+    id = Column(Integer, primary_key=True)
+    start = Column(DateTime, default=datetime.datetime.now, nullable=False)
+    end = Column(DateTime, nullable=True)
+    todo_id = Column(Integer, ForeignKey("todos.id")) 
+    todo = relationship("TodoItem", backref="time")
 
 
 class DataManager:
@@ -129,10 +143,54 @@ class DataManager:
 
     def remove(self, id):
         session = self.Session()
+        session.query(TimeRecorder).filter(TimeRecorder.todo_id == id).delete()
         session.query(TodoItem).filter(TodoItem.id == id).delete()
         session.commit()
         session.close()
 
+    def start(self, id):
+        session = self.Session()
+        items = session.query(TimeRecorder).filter(and_(TimeRecorder.end == None,
+            TimeRecorder.todo_id == id)).all()
+        if len(items) != 0:
+            print("该任务早已开始计时(￢_￢)")
+        else:
+            todoItem = session.query(TodoItem).filter(TodoItem.id == id).first()
+            if todoItem == None:
+                print("不存在id 为 {} 的任务(/= _ =)/~┴┴".format(id))
+            else:
+                timeRecorder = TimeRecorder()
+                todoItem.time.append(timeRecorder)
+                session.commit()
+                print("start!!, 请抓紧时间!!")
+        session.close()
+        return 0
+                
+    def stop(self, id):
+        session = self.Session()
+        items = session.query(TimeRecorder).filter(and_(TimeRecorder.end == None,
+            TimeRecorder.todo_id == id)).all()
+        if len(items) == 0:
+            print("不存在对应任务已经开始的记录(..•˘_˘•..)")
+        else:
+            items[0].end = datetime.datetime.now()
+            print("该次活动经历了: {}".format(items[0].end - items[0].start))
+            session.commit()
+
+        session.close()
+        return 0
+
+    def timetable(self, id):
+        session = self.Session()
+        items = session.query(TimeRecorder) \
+            .filter(and_(TimeRecorder.todo_id == id, TimeRecorder.end != None)) \
+            .order_by(TimeRecorder.start.desc())    \
+            .all()
+        if len(items) == 0:
+            print("不存在对应任务的记录(..•˘_˘•..)")
+
+        session.close()
+        return items
 
 def text_align(text, size):
     count = 0
@@ -158,15 +216,36 @@ def display_help():
     print("\t-l, --list\t 列出所有未完成项目")
     print("\t-d, --delete id\t 删除指定id项目")
     print("\t-a, --all\t 列出全部项目，包括已完成")
-    print("\t-p, --priority normal\t 指定记录的优先级, \
-          可选项为warn, normal, low, 默认值为normal")
+    print("\t-p, --priority normal\t 指定记录的优先级, " +
+          "可选项为warn, normal, low, 默认值为normal")
     print("\t    --export_json file\t 导出数据为json文件，file为文件路径")
+    print("\t    --start id\t 开始记录时间，为了统计任务花费时间")
+    print("\t    --end   id\t 停止记录时间，为了统计任务花费时间")
+    print("\t    --timetable id\t 查看任务统计的时间表")
     print("\t-v, --version\t 查看当前版本")
     print("\t-h, --help\t 列出帮助")
 
 
 def wrong():
     print("参数错误，使用-h, --help查看帮助哦;)")
+
+def display_timetable(items):
+    blueContent = '\033[0;36m'
+    yellowStatus = '\033[0;33m'
+    colorEnd = '\033[0m'
+
+    total_time = datetime.timedelta()
+
+    color_format = "{color_start:s}start: {start:s} \t" + \
+                   "end: {end:s} \t spend:" + \
+                   "{spend:s}{color_end:s}"
+    for item in items:
+        delta = item.end - item.start
+        total_time += delta
+        print(color_format.format(**{'color_start': blueContent, 'color_end': colorEnd,
+                                  'start': str(item.start), 'end': str(item.end),
+                                  'spend': str(delta)}))
+    print(yellowStatus + "total: {}".format(str(total_time)) + colorEnd)
 
 
 def display(items):
@@ -251,7 +330,9 @@ class ArgFuncts:
                            '--finished': self.finished, '--delete': self.delete,
                            '--all': self.all, '--priority': self.priority,
                            '--version': self.version, '--help': self.help,
-                           '--export_json': self.export_json}
+                           '--export_json': self.export_json,
+                           '--start': self.start, '--stop': self.stop,
+                           '--timetable': self.timetable}
 
     def todo(self, message):
         if (message.strip() == ''):
@@ -309,10 +390,10 @@ class ArgFuncts:
         for item in items:
             ret.append(item.to_dic())
         json_str = json.dumps(ret, ensure_ascii=False, indent=4, separators=(', ', ': '))
-        
+
         if value == '':
             raise KeyError
-        
+
         try:
             fp = open(value, 'w')
             fp.write(json_str)
@@ -320,6 +401,28 @@ class ArgFuncts:
             print("文件读写错误: {}".format(e))
         finally:
             fp.close()
+
+    def start(self, value):
+        if not value.isdigit():
+            wrong()
+            return 1
+        self.dataManager.start(int(value))
+        return 0
+
+    def stop(self, value):
+        if not value.isdigit():
+            wrong()
+            return 1
+        self.dataManager.stop(int(value))
+        return 0
+
+    def timetable(self, value):
+        if not value.isdigit():
+            wrong()
+            return 1
+        items = self.dataManager.timetable(int(value))
+        display_timetable(items)
+        return 0
 
     def filter(self, value):
         try:
@@ -339,8 +442,9 @@ def main():
     args = None
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 't:lf:d:ap:vh',
-                                       ['todo=', 'list', 'finished=', 'delete',
-                                       'all', 'priority=', 'version', 'help', 'export_json='])
+                                       ['todo=', 'list', 'finished=', 'delete=',
+                                       'all', 'priority=', 'version', 'help', 'export_json=',
+                                       'start=', 'stop=', 'timetable='])
     except getopt.GetoptError as e:
         wrong()
         print(e)
