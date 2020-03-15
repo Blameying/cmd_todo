@@ -1,6 +1,6 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 
-import sqlite3
 import sqlalchemy
 from sqlalchemy import Column, Integer, Text, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
@@ -8,6 +8,7 @@ import os
 import sys
 import getopt
 import datetime
+import json
 
 
 Base = declarative_base()
@@ -30,10 +31,15 @@ class TodoItem(Base):
 
     def __repr__(self):
         return '<TodoItem: id: {}, priority: {}, content: {}, \
-            created_at: {}, is_finish: {}'.format(self.id, self.level,
-                                                  self.content,
-                                                  self.created_at,
-                                                  self.is_finish)
+                created_at: {}, is_finish: {}, finished_at: {}>'.format(self.id, self.level,
+                                                                        self.content,
+                                                                        self.created_at,
+                                                                        self.is_finish, self.finished_at)
+
+    def to_dic(self):
+        return {'id': self.id, 'level': self.level, 'content': self.content,
+                'created_at': str(self.created_at), 'is_finish': self.is_finish,
+                'finished_at': str(self.finished_at)}
 
 
 class DataManager:
@@ -148,12 +154,13 @@ def display_help():
     print("=,= 这是一个Todo 记录程序，Write By 哈哈. \n")
 
     print("参数: ")
-    print("\t-t, --todo=msg\t 增加一条记录 正文为msg")
+    print("\t-t, --todo msg\t 增加一条记录 正文为msg")
     print("\t-l, --list\t 列出所有未完成项目")
-    print("\t-d, --delete=id\t 删除指定id项目")
+    print("\t-d, --delete id\t 删除指定id项目")
     print("\t-a, --all\t 列出全部项目，包括已完成")
-    print("\t-p, --priority=normal\t 指定记录的优先级, \
+    print("\t-p, --priority normal\t 指定记录的优先级, \
           可选项为warn, normal, low, 默认值为normal")
+    print("\t    --export_json file\t 导出数据为json文件，file为文件路径")
     print("\t-v, --version\t 查看当前版本")
     print("\t-h, --help\t 列出帮助")
 
@@ -243,7 +250,8 @@ class ArgFuncts:
                            '--todo': self.todo, '--list': self.list,
                            '--finished': self.finished, '--delete': self.delete,
                            '--all': self.all, '--priority': self.priority,
-                           '--version': self.version, '--help': self.help}
+                           '--version': self.version, '--help': self.help,
+                           '--export_json': self.export_json}
 
     def todo(self, message):
         if (message.strip() == ''):
@@ -295,6 +303,24 @@ class ArgFuncts:
         display_help()
         return 0
 
+    def export_json(self, value):
+        ret = []
+        items = self.dataManager.query_all()
+        for item in items:
+            ret.append(item.to_dic())
+        json_str = json.dumps(ret, ensure_ascii=False, indent=4, separators=(', ', ': '))
+        
+        if value == '':
+            raise KeyError
+        
+        try:
+            fp = open(value, 'w')
+            fp.write(json_str)
+        except IOError as e:
+            print("文件读写错误: {}".format(e))
+        finally:
+            fp.close()
+
     def filter(self, value):
         try:
             self.functs_map[value[0]](value[1])
@@ -313,10 +339,11 @@ def main():
     args = None
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 't:lf:d:ap:vh',
-                                       ['todo', 'list', 'finished', 'delete',
-                                       'all', 'priority', 'version', 'help'])
-    except getopt.GetoptError:
+                                       ['todo=', 'list', 'finished=', 'delete',
+                                       'all', 'priority=', 'version', 'help', 'export_json='])
+    except getopt.GetoptError as e:
         wrong()
+        print(e)
         return
 
     argfuncts = ArgFuncts()
