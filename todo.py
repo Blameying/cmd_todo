@@ -55,23 +55,25 @@ class TimeRecorder(Base):
     todo_id = Column(Integer, ForeignKey("todos.id")) 
     todo = relationship("TodoItem", backref="time")
 
+    comment = Column(Text, default="")
+
 
 class DataManager:
 
     global LEVELS
+    pathStrList = ['.config', 'todo']
+    curPath = os.environ['HOME']
 
     def __init__(self):
         global Base
-        pathStrList = ['.config', 'todo']
-        curPath = os.environ['HOME']
         try:
-            for path in pathStrList:
-                curPath = os.path.join(curPath, path)
-                if not (os.path.exists(curPath) and os.path.isdir(curPath)):
-                    os.mkdir(curPath)
+            for path in self.pathStrList:
+                self.curPath = os.path.join(self.curPath, path)
+                if not (os.path.exists(self.curPath) and os.path.isdir(self.curPath)):
+                    os.mkdir(self.curPath)
 
-            curPath = os.path.join(curPath, 'todo.db')
-            self.engine = sqlalchemy.create_engine('sqlite:///' + curPath,
+            self.engine = sqlalchemy.create_engine('sqlite:///' + \
+                                                   os.path.join(self.curPath, "todo.db"),
                                                    echo=False)
             Base.metadata.create_all(self.engine)
             self.Session = sqlalchemy.orm.sessionmaker(bind=self.engine)
@@ -174,6 +176,7 @@ class DataManager:
             print("不存在对应任务已经开始的记录(..•˘_˘•..)")
         else:
             items[0].end = datetime.datetime.now()
+            self.timeComment(items[0])
             print("该次活动经历了: {}".format(items[0].end - items[0].start))
             session.commit()
 
@@ -191,6 +194,26 @@ class DataManager:
 
         session.close()
         return items
+
+    def timeComment(self, timeRecorder):
+        filename = os.path.join(self.curPath, ".time_comment_tmp")
+        fp = open(filename, "w")
+        fp.write("\n#请输入你的评论，输入Esc:wq结束(正常vim的退出方式)" + \
+                 "\n# #符号开头的为注释")
+        fp.close()
+        os.system("vim "+filename)
+        fp = open(filename, "r")
+        lines = fp.readlines()
+        comment = ""
+        for line in lines:
+            if line.strip().startswith("#"):
+                lines.remove(line)
+            else:
+                comment += line
+
+        timeRecorder.comment = comment
+        return timeRecorder
+        
 
 def text_align(text, size):
     count = 0
@@ -245,6 +268,9 @@ def display_timetable(items):
         print(color_format.format(**{'color_start': blueContent, 'color_end': colorEnd,
                                   'start': str(item.start), 'end': str(item.end),
                                   'spend': str(delta)}))
+        if item.comment.strip() != "":
+            print(yellowStatus + item.comment + colorEnd)
+
     print(yellowStatus + "total: {}".format(str(total_time)) + colorEnd)
 
 
