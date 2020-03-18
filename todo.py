@@ -137,6 +137,7 @@ class DataManager:
         session.close()
 
     def finish(self, id):
+        self.stop(id)
         session = self.Session()
         session.query(TodoItem).filter(TodoItem.id == id)   \
                                .update({"is_finish": True})
@@ -152,6 +153,11 @@ class DataManager:
 
     def start(self, id):
         session = self.Session()
+        todoItem = session.query(TodoItem).filter(TodoItem.id == id).first()
+        if (todoItem == None or todoItem.is_finish):
+            print("该任务不存在或者已完成")
+            session.close()
+            return 1;
         items = session.query(TimeRecorder).filter(and_(TimeRecorder.end == None,
             TimeRecorder.todo_id == id)).all()
         if len(items) != 0:
@@ -170,6 +176,11 @@ class DataManager:
                 
     def stop(self, id):
         session = self.Session()
+        todoItem = session.query(TodoItem).filter(TodoItem.id == id).first()
+        if (todoItem == None or todoItem.is_finish):
+            print("该任务不存在或已完成")
+            session.close()
+            return 1;
         items = session.query(TimeRecorder).filter(and_(TimeRecorder.end == None,
             TimeRecorder.todo_id == id)).all()
         if len(items) == 0:
